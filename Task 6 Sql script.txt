@@ -1,0 +1,75 @@
+Monthly Sales Analysis Script (PostgreSQL)
+
+
+1️⃣ Drop table if it already exists
+DROP TABLE IF EXISTS online_sales;
+
+2️⃣ Create the online_sales table
+CREATE TABLE online_sales (
+  order_id     BIGINT,
+  order_date   DATE,
+  amount       NUMERIC(10,2),
+  product_id   BIGINT
+);
+
+3️⃣ Insert sample dataset
+INSERT INTO online_sales (order_id, order_date, amount, product_id) VALUES
+(1001, '2024-01-15', 250.00, 1),
+(1002, '2024-01-20', 100.00, 2),
+(1003, '2024-02-03',  75.00, 3),
+(1004, '2024-02-15', 500.00, 1),
+(1005, '2024-02-28', 125.00, 2),
+(1006, '2024-03-10',  60.00, 4),
+(1007, '2024-03-11', 300.00, 1),
+(1008, '2024-03-12', 450.00, 2),
+(1009, '2024-05-05', 600.00, 3),
+(1010, '2024-05-20', 700.00, 3),
+(1011, '2024-07-14', 800.00, 2),
+(1012, '2024-07-20', 200.00, 4);
+
+4️⃣ Verify data inserted
+SELECT * FROM online_sales;
+
+5️⃣ Monthly revenue and order count
+SELECT
+  TO_CHAR(date_trunc('month', order_date), 'YYYY-MM') AS month,
+  COALESCE(SUM(amount), 0)       AS monthly_revenue,
+  COUNT(DISTINCT order_id)       AS order_count
+FROM online_sales
+GROUP BY date_trunc('month', order_date)
+ORDER BY date_trunc('month', order_date);
+
+6️⃣ Top 3 months by revenue
+WITH monthly AS (
+  SELECT date_trunc('month', order_date) AS month_start,
+         SUM(amount) AS monthly_revenue
+  FROM online_sales
+  GROUP BY month_start
+)
+SELECT TO_CHAR(month_start, 'YYYY-MM') AS month, monthly_revenue
+FROM (
+  SELECT *, RANK() OVER (ORDER BY monthly_revenue DESC) AS rnk
+  FROM monthly
+) t
+WHERE rnk <= 3
+ORDER BY monthly_revenue DESC;
+
+7️⃣ Include missing months (show zero revenue)
+WITH months AS (
+  SELECT generate_series(
+           (SELECT date_trunc('month', MIN(order_date)) FROM online_sales),
+           (SELECT date_trunc('month', MAX(order_date)) FROM online_sales),
+           interval '1 month'
+         ) AS month_start
+)
+SELECT
+  TO_CHAR(m.month_start,'YYYY-MM') AS month,
+  COALESCE(SUM(os.amount),0)      AS monthly_revenue,
+  COUNT(DISTINCT os.order_id)     AS order_count
+FROM months m
+LEFT JOIN online_sales os
+  ON date_trunc('month', os.order_date) = m.month_start
+GROUP BY m.month_start
+ORDER BY m.month_start;
+
+
